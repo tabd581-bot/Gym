@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#14161a"><link rel="manifest" href="manifest.json"><link rel="icon" href="icon.svg">
+<title>GYM TRACKER PRO</title>
+<style>
+:root{--bg:#101215;--cd:#1c1f24;--cd2:#262a31;--ac:#b8f03c;--tx:#eef0f2;--mu:#8d95a0;--rd:#ff5d5d;font-family:system-ui,"Segoe UI",Tahoma,sans-serif}
+:root[data-t=light]{--bg:#f2f4f6;--cd:#fff;--cd2:#e4e8ec;--tx:#14161a;--mu:#5d6670}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);padding-bottom:84px}
+header{position:sticky;top:0;z-index:5;background:var(--bg);padding:10px 14px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--cd2)}
+h1{font-size:17px;margin:0;color:var(--ac);letter-spacing:.5px}h2{font-size:16px;margin:14px 0 8px}h3{font-size:14px;margin:0 0 6px}
+main{padding:12px;max-width:760px;margin:auto}
+.c{background:var(--cd);border-radius:14px;padding:12px;margin-bottom:10px}
+.g{display:grid;grid-template-columns:1fr 1fr;gap:8px}.r{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.sp{justify-content:space-between}
+.big{font-size:22px;font-weight:700}.mu{color:var(--mu);font-size:12px}
+button,select,input,textarea{font:inherit;color:var(--tx);background:var(--cd2);border:1px solid transparent;border-radius:10px;padding:10px;min-height:44px}
+input,select{max-width:100%}input[type=number]{width:84px}input[type=checkbox]{min-height:0;width:24px;height:24px}
+button{background:var(--ac);color:#101215;font-weight:700;cursor:pointer;border:0}button.s{background:var(--cd2);color:var(--tx)}button.x{background:var(--rd);color:#fff}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--ac)}
+.bar{height:10px;background:var(--cd2);border-radius:6px;overflow:hidden;margin:4px 0 8px}.bar i{display:block;height:100%;background:var(--ac)}.bar i.o{background:var(--rd)}
+nav{position:fixed;bottom:0;inset-inline:0;background:var(--cd);display:flex;overflow-x:auto;padding:6px 4px calc(6px + env(safe-area-inset-bottom));border-top:1px solid var(--cd2)}
+nav button{flex:1 0 62px;background:none;color:var(--mu);font-size:11px;padding:6px 2px;min-height:48px}nav button b{display:block;font-size:19px}nav button.on{color:var(--ac)}
+.row{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid var(--cd2);font-size:13px}
+.tag{font-size:10px;background:var(--cd2);border-radius:6px;padding:2px 6px;color:var(--mu)}
+#ban{position:fixed;top:56px;inset-inline:10px;z-index:9;background:var(--ac);color:#101215;border-radius:12px;padding:10px;display:none}
+canvas{width:100%;height:220px;background:var(--cd);border-radius:12px}
+.ill{width:52px;height:52px;border-radius:12px;background:var(--cd2);display:grid;place-items:center;font-size:26px}
+details summary{cursor:pointer;padding:6px 0}
+</style></head><body>
+<header><h1>GYM TRACKER PRO</h1><span id="rest" class="mu"></span></header>
+<div id="ban"></div><main id="v"></main>
+<nav id="nav"></nav>
+<script>
+/* ===== DB ===== */
+const ST=['profile','programs','sessions','exercises','measures','foods','meals','reminders','settings'];let db;
+const openDB=()=>new Promise((r,j)=>{const q=indexedDB.open('gtp',1);q.onupgradeneeded=e=>{const d=q.result;ST.forEach(s=>{if(!d.objectStoreNames.contains(s))d.createObjectStore(s,{keyPath:'id'})})/* future versions: add migrations by e.oldVersion */};q.onsuccess=()=>{db=q.result;r()};q.onerror=j});
+const tx=(s,m,f)=>new Promise(r=>{const t=db.transaction(s,m),q=f(t.objectStore(s));t.oncomplete=()=>r(q&&q.result)});
+const all=s=>tx(s,'readonly',o=>o.getAll()),get=(s,k)=>tx(s,'readonly',o=>o.get(k)),put=(s,v)=>tx(s,'readwrite',o=>o.put(v)),del=(s,k)=>tx(s,'readwrite',o=>o.delete(k)),clr=s=>tx(s,'readwrite',o=>o.clear());
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const $=s=>document.querySelector(s),E=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const td=()=>new Date().toLocaleDateString('en-CA'),n1=v=>Math.round(v*10)/10,num=v=>isFinite(parseFloat(v))?parseFloat(v):0;
+/* ===== Seed data ===== */
+const MN={bf:'الفطار',s1:'سناك 1',l:'الغداء',s2:'سناك 2',d:'العشاء',bb:'قبل النوم'};
+const DT={bf:'08:00',s1:'11:00',l:'14:00',s2:'17:00',d:'20:00',bb:'22:00'};
+const MK={w:'الوزن (kg)',chest:'الصدر',sh:'الأكتاف',neck:'الرقبة',bl:'باي أيسر',br:'باي أيمن',fl:'ساعد أيسر',fr:'ساعد أيمن',tl:'فخذ أيسر',tr:'فخذ أيمن',cl:'سمانة يسرى',cr:'سمانة يمنى',waist:'الوسط'};
+const CAT={chest:['الصدر','🫁'],back:['الظهر','🔙'],sh:['الأكتاف','🏋️'],bi:['باي','💪'],tri:['تراي','💪'],fa:['الساعد','✊'],qd:['الفخذ الأمامي','🦵'],ha:['الفخذ الخلفي','🦵'],gl:['الأرداف','🍑'],calf:['السمانة','🦶'],abs:['البطن','🎯'],cardio:['كارديو','🏃']};
+const EXD=[['chest','بنش بريس','Barbell Bench Press','Barbell','ترايسبس، كتف أمامي','استلقِ وثبّت الكتفين والقدمين|انزل بالبار لمنتصف الصدر ثم ادفع لأعلى|رفع الأرداف أو ارتداد البار من الصدر'],
+['chest','ضغط دمبل مائل','Incline Dumbbell Press','Dumbbells','كتف أمامي، ترايسبس','مقعد مائل 30°، الدمبل عند الصدر|ادفع للأعلى مع تقارب خفيف ثم انزل ببطء|ميل زائد للمقعد'],
+['back','سحب أرضي','Barbell Row','Barbell','باي، خلفي كتف','انحنِ بالجذع والظهر مستقيم|اسحب البار نحو أسفل البطن|تحريك الجذع للأعلى والأسفل'],
+['back','سحب علوي','Lat Pulldown','Cable','باي، ساعد','اجلس وثبّت الفخذين|اسحب البار لأعلى الصدر|الميل الزائد للخلف'],
+['sh','ضغط أكتاف دمبل','Dumbbell Shoulder Press','Dumbbells','ترايسبس','اجلس بظهر مستقيم والدمبل عند الأذن|ادفع للأعلى دون قفل كامل|تقويس أسفل الظهر'],
+['sh','رفرفة جانبية','Lateral Raise','Dumbbells','كتف خلفي','قف والدمبل بجانبك|ارفع للجانب حتى مستوى الكتف|استخدام الزخم'],
+['bi','باي بار','Barbell Curl','Barbell','ساعد','قف والبار بقبضة تحت|اثنِ المرفقين دون تحريكهما|هز الجذع'],
+['tri','تراي كابل','Triceps Pushdown','Cable','—','مرفقان ملتصقان بالجسم|ادفع للأسفل حتى فرد الذراع|ابتعاد المرفقين'],
+['fa','باي ساعد عكسي','Reverse Curl','Barbell','باي','قبضة فوق|اثنِ ببطء|وزن ثقيل جداً'],
+['qd','سكوات','Barbell Squat','Barbell','أرداف، أسفل الظهر','البار على الظهر العلوي، القدمان بعرض الكتفين|انزل حتى توازي الفخذ مع الأرض ثم قم|انحناء الركبتين للداخل'],
+['qd','ضغط أرجل','Leg Press','Machine','أرداف','ظهر ملتصق بالمقعد|انزل بتحكم ثم ادفع|رفع الأرداف عن المقعد'],
+['ha','رومانيان ديدلفت','Romanian Deadlift','Barbell','أرداف، أسفل الظهر','قف والبار أمام الفخذ|ادفع الحوض للخلف مع ظهر مستقيم|تقويس الظهر'],
+['gl','هيب ثراست','Hip Thrust','Barbell','هامسترنج','الكتف على المقعد والبار على الحوض|ارفع الحوض حتى استقامة الجسم|فرط تقوس الظهر'],
+['calf','سمانة واقف','Standing Calf Raise','Machine','—','أطراف القدم على الحافة|ارتفع لأقصى حد وانزل ببطء|حركة قصيرة'],
+['abs','كرنش','Crunch','Bodyweight','—','استلقِ وركبتاك مثنيتان|ارفع الكتفين بتقلص البطن|شد الرقبة'],
+['cardio','جري على السير','Treadmill Run','Machine','—','ابدأ بإحماء 5 دقائق|حافظ على سرعة ثابتة|الإمساك بالمقابض']].map((e,i)=>{const[s,st,m]=e[5].split('|');return{id:'e'+i,cat:e[0],ar:e[1],en:e[2],eq:e[3],sec:e[4],start:s,steps:st,mistake:m}});
+/* قيم تقريبية لكل 100 جم - راجع الملصق الغذائي وعدّل */
+const FD=[['بيض مسلوق','Egg boiled',155,13,1.1,11],['بيض نيء','Egg raw',143,12.6,.7,9.5],['لبن كامل','Whole milk',61,3.2,4.8,3.3],['جبنة قريش','Cottage cheese',98,11,3.4,4.3],['جبنة موزاريلا','Mozzarella',280,28,3,17],['صدر فراخ مطبوخ','Chicken breast cooked',165,31,0,3.6],['صدر فراخ نيء','Chicken breast raw',120,22.5,0,2.6],['لحم بقري مطبوخ','Beef cooked',250,26,0,15],['تونة مياه','Tuna in water',116,26,0,1],['سلمون مطبوخ','Salmon cooked',206,22,0,12],['رز أبيض مطبوخ','Rice cooked',130,2.7,28,.3],['رز أبيض نيء','Rice raw',365,7,80,.7],['مكرونة مطبوخة','Pasta cooked',158,5.8,31,.9],['بطاطس مسلوقة','Potato boiled',87,1.9,20,.1],['عيش بلدي','Baladi bread',270,9,55,1.5],['عيش توست','Toast',265,9,49,3.2],['شوفان نيء','Oats raw',389,16.9,66,6.9],['فول مدمس','Fava beans cooked',110,8,19,.5],['عدس مطبوخ','Lentils cooked',116,9,20,.4],['موز','Banana',89,1.1,23,.3],['تفاح','Apple',52,.3,14,.2],['خيار','Cucumber',15,.7,3.6,.1],['طماطم','Tomato',18,.9,3.9,.2],['زبدة فول سوداني','Peanut butter',588,25,20,50],['واي بروتين','Whey protein',400,80,8,6],['زيت زيتون','Olive oil',884,0,0,100],['لوز','Almonds',579,21,22,50]].map((f,i)=>({id:'f'+i,name:f[0]+' / '+f[1],k:f[2],p:f[3],c:f[4],f:f[5],approx:1}));
+/* ===== State ===== */
+let P,S,R,FOODS,EX,SES,EDIT,tab='dash',date=td(),restEnd=0,sugOff=0,pendingSnooze=null;
+const TABS=[['dash','🏠','الرئيسية'],['work','🏋️','التمارين'],['lib','📚','المكتبة'],['meas','📏','القياسات'],['nut','🍽️','التغذية'],['prog','📈','التقدم'],['hist','🕘','السجل'],['set','⚙️','الإعدادات']];
+async function init(){await openDB();
+ P=await get('profile','me')||{id:'me',name:'Talal',age:29,gender:'ذكر',h:180,w:55};
+ S=await get('settings','s')||{id:'s',cal:2950,p:110,c:428,f:80,mult:1.7,rest:90,theme:'dark',surplus:340};
+ R=await get('reminders','r')||{id:'r',t:{...DT},on:Object.fromEntries(Object.keys(DT).map(k=>[k,1])),msg:{},fired:''};
+ await put('profile',P);await put('settings',S);await put('reminders',R);
+ if(!(await all('exercises')).length)for(const e of EXD)await put('exercises',e);
+ if(!(await all('foods')).length)for(const f of FD)await put('foods',f);
+ EX=await all('exercises');FOODS=await all('foods');SES=await get('sessions','active');
+ document.documentElement.dataset.t=S.theme;if(SES)tab='work';
+ if('serviceWorker'in navigator)navigator.serviceWorker.register('service-worker.js').catch(()=>{});
+ $('#nav').innerHTML=TABS.map(t=>`<button data-t="${t[0]}" onclick="go('${t[0]}')"><b>${t[1]}</b>${t[2]}</button>`).join('');render();
+ setInterval(tick,1000);setInterval(remCheck,15000);}
+const go=t=>{tab=t;render()};
+async function render(){document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t==tab));$('#v').innerHTML=await V[tab]();if(tab=='prog')drawChart();window.scrollTo(0,0)}
+const bar=(v,t)=>`<div class="bar"><i class="${v>t?'o':''}" style="width:${Math.min(100,t?v/t*100:0)}%"></i></div>`;
+const bmi=()=>P.w/((P.h/100)**2),bmr=()=>10*P.w+6.25*P.h-5*P.age+(P.gender=='أنثى'?-161:5);
+async function dayTot(d){const m=await get('meals',d),t={k:0,p:0,c:0,f:0};if(m)Object.values(m.items||{}).flat().forEach(i=>{t.k+=i.k;t.p+=i.p;t.c+=i.c;t.f+=i.f});return t}
+/* ===== Views ===== */
+const V={
+async dash(){const t=await dayTot(td()),ss=(await all('sessions')).filter(x=>!x.active),wk=Date.now()-7*864e5,ms=(await all('measures')).sort((a,b)=>a.date<b.date?1:-1);
+ const now=new Date().toTimeString().slice(0,5),nx=Object.keys(MN).find(k=>R.on[k]&&R.t[k]>now);
+ return `<div class="g"><div class="c"><div class="mu">الوزن</div><div class="big">${P.w} kg</div></div><div class="c"><div class="mu">BMI</div><div class="big">${n1(bmi())}</div></div></div>
+ <div class="c"><h3>السعرات</h3><div class="r sp"><span class="big">${Math.round(t.k)}</span><span class="mu">من ${S.cal} • متبقي ${Math.round(S.cal-t.k)}</span></div>${bar(t.k,S.cal)}
+ <h3>البروتين</h3><div class="r sp"><span class="big">${n1(t.p)} g</span><span class="mu">من ${S.p} • متبقي ${n1(S.p-t.p)}</span></div>${bar(t.p,S.p)}
+ <div class="mu">كارب ${n1(t.c)}/${S.c} g</div>${bar(t.c,S.c)}<div class="mu">دهون ${n1(t.f)}/${S.f} g</div>${bar(t.f,S.f)}</div>
+ <div class="g"><div class="c"><div class="mu">تمرين اليوم</div><b>${SES?E(SES.name)+' (جارٍ)':'لا يوجد تمرين نشط'}</b><br><button onclick="go('work')">${SES?'متابعة':'ابدأ'}</button></div>
+ <div class="c"><div class="mu">تمارين آخر 7 أيام</div><div class="big">${ss.filter(x=>x.start>wk).length}</div></div></div>
+ <div class="c"><div class="mu">آخر قياس</div>${ms[0]?`<b>${ms[0].date}</b> — ${Object.entries(ms[0].v).map(([k,v])=>MK[k].split(' ')[0]+' '+v).join('، ')}`:'لم تسجل قياسات بعد'}</div>
+ <div class="c"><div class="mu">الوجبة القادمة</div><b>${nx?MN[nx]+' — '+R.t[nx]:'لا وجبات متبقية اليوم'}</b></div>`},
+async work(){if(SES)return sesView();if(EDIT)return editView();const ps=await all('programs');
+ return `<div class="r sp"><h2>برامجي</h2><button onclick="editProg()">+ يوم جديد</button></div>${ps.map(p=>`<div class="c"><b>${E(p.name)}</b><div class="mu">${p.ex.map(i=>EX.find(e=>e.id==i)?.ar||'').join('، ')||'فارغ'}</div><div class="r"><button onclick="startDay('${p.id}')">ابدأ</button><button class="s" onclick="editProg('${p.id}')">تعديل</button><button class="s" onclick="dupProg('${p.id}')">نسخ</button><button class="x" onclick="delProg('${p.id}')">حذف</button></div></div>`).join('')||'<div class="c mu">أنشئ يوم تمرين أو ابدأ تمريناً حراً.</div>'}<button onclick="startDay()">تمرين حر</button>`},
+async lib(){const q=($('#q')?.value||'').toLowerCase();return `<input id="q" placeholder="بحث بالعربي أو الإنجليزي" oninput="libFilter()" style="width:100%"><select id="cf" onchange="libFilter()" style="width:100%;margin-top:6px"><option value="">كل العضلات</option>${Object.entries(CAT).map(([k,v])=>`<option value="${k}">${v[0]}</option>`).join('')}</select><div id="ll">${libList()}</div>`},
+async meas(){const ms=(await all('measures')).sort((a,b)=>a.date<b.date?1:-1);
+ return `<div class="c"><h3>قياس جديد</h3><input type="date" id="md" value="${td()}"><div class="g" style="margin-top:8px">${Object.entries(MK).map(([k,l])=>`<label class="mu">${l}<br><input type="number" step="0.1" id="m_${k}" style="width:100%"></label>`).join('')}</div><button style="margin-top:8px" onclick="addMeas()">حفظ القياس</button></div>
+ <div class="c"><h3>مقارنة</h3><div class="r"><select id="ca">${ms.map(m=>`<option value="${m.id}">${m.date}</option>`).join('')}</select><select id="cb">${ms.map((m,i)=>`<option value="${m.id}" ${i==1?'selected':''}>${m.date}</option>`).join('')}</select><button class="s" onclick="cmp()">قارن</button></div><div id="cr"></div></div>
+ <h2>السجل</h2>${ms.map(m=>`<div class="c"><div class="r sp"><b>${m.date}</b><span><button class="s" onclick="editMeas('${m.id}')">✎</button> <button class="x" onclick="delRec('measures','${m.id}')">🗑</button></span></div><div class="mu">${Object.entries(m.v).map(([k,v])=>MK[k]+': '+v).join(' • ')}</div></div>`).join('')}`},
+async nut(){const m=await get('meals',date)||{id:date,items:{},done:{}},t=await dayTot(date),rem={k:S.cal-t.k,p:S.p-t.p};
+ const opts=FOODS.map(f=>`<option value="${f.id}">${E(f.name)}${f.approx?' ~':''}</option>`).join('');
+ return `<div class="r sp"><input type="date" id="nd" value="${date}" onchange="date=this.value;render()"><button class="s" onclick="copyY()">نسخ أمس</button></div>
+ <div class="c"><div class="r sp"><b>${Math.round(t.k)} / ${S.cal} kcal</b><span class="mu">متبقي ${Math.round(rem.k)} kcal • ${n1(rem.p)} g بروتين</span></div>${bar(t.k,S.cal)}<div class="mu">P ${n1(t.p)}/${S.p} • C ${n1(t.c)}/${S.c} • F ${n1(t.f)}/${S.f}</div></div>
+ ${Object.keys(MN).map(k=>{const it=m.items[k]||[],s=it.reduce((a,i)=>({k:a.k+i.k,p:a.p+i.p}),{k:0,p:0});return `<div class="c"><div class="r sp"><h3>${MN[k]} <span class="mu">${R.t[k]}</span></h3><label class="r mu"><input type="checkbox" ${m.done[k]?'checked':''} onchange="markDone('${k}',this.checked)">تم</label></div>
+ ${it.map((i,x)=>`<div class="row"><span>${E(i.name)} <span class="tag">${i.g}g</span></span><span>${Math.round(i.k)}k • ${n1(i.p)}p <button class="x" style="min-height:32px;padding:2px 8px" onclick="rmFood('${k}',${x})">✕</button></span></div>`).join('')}
+ <div class="mu">المجموع ${Math.round(s.k)} kcal • ${n1(s.p)} g</div><div class="r"><select id="fs_${k}" style="flex:1">${opts}</select><input type="number" id="fg_${k}" placeholder="جم" value="100"><button onclick="addFood('${k}')">+</button></div></div>`}).join('')}
+ <div class="c"><h3>اقتراحات (من قاعدة الأطعمة فقط)</h3>${sugHtml(rem)}<div class="mu">اقتراحات حسابية للتقريب من المتبقي، لا تضمن زيادة العضلات.</div></div>
+ <div class="c"><h3>أطعمة مخصصة</h3><div class="r"><input id="cn" placeholder="الاسم (نيء/مطبوخ)"><input type="number" id="ck" placeholder="kcal"><input type="number" id="cp" placeholder="P"><input type="number" id="cc" placeholder="C"><input type="number" id="cf2" placeholder="F"></div><div class="mu">القيم لكل 100 جم</div><button onclick="addCustom()">حفظ الطعام</button>
+ <details><summary>كل الأطعمة (~ = قيم تقريبية غير موثقة)</summary>${FOODS.map(f=>`<div class="row"><span>${E(f.name)}${f.approx?' ~':''}<br><span class="mu">${f.k}k P${f.p} C${f.c} F${f.f}</span></span><span><button class="s" onclick="editFood('${f.id}')">✎</button>${f.id[0]=='c'?` <button class="x" onclick="delRec('foods','${f.id}')">🗑</button>`:''}</span></div>`).join('')}</details></div>`},
+async prog(){const ms=await all('measures'),ss=(await all('sessions')).filter(x=>!x.active);
+ return `<div class="r"><select id="pm" onchange="drawChart()">${Object.entries(MK).map(([k,l])=>`<option value="${k}">${l}</option>`).join('')}<option value="str">قوة: أعلى وزن</option></select><select id="pe" onchange="drawChart()">${EX.map(e=>`<option value="${e.id}">${e.ar}</option>`).join('')}</select><select id="pr" onchange="drawChart()"><option value="7">أسبوع</option><option value="30">شهر</option><option value="90">3 شهور</option><option value="180">6 شهور</option><option value="365">سنة</option><option value="99999" selected>الكل</option></select></div><canvas id="cv" width="700" height="300"></canvas><div id="cs" class="mu"></div>${await weekly(ms,ss)}`},
+async hist(){const ss=(await all('sessions')).filter(x=>!x.active).sort((a,b)=>b.start-a.start),ms=(await all('meals')).sort((a,b)=>a.id<b.id?1:-1);
+ return `<h2>تاريخ التمارين</h2>${ss.map(s=>`<div class="c"><div class="r sp"><b>${s.date} — ${E(s.name)}</b><button class="x" onclick="delRec('sessions','${s.id}')">🗑</button></div><div class="mu">المدة ${Math.round(s.dur/60000)} د</div>${s.ex.map(e=>`<div class="row"><span>${E(e.name)}</span><span class="mu">${e.sets.filter(x=>x.d).map(x=>x.w+'×'+x.r).join(' | ')}</span></div>${e.note?`<div class="mu">📝 ${E(e.note)}</div>`:''}`).join('')}</div>`).join('')||'<div class="c mu">لا توجد تمارين محفوظة.</div>'}
+ <h2>تاريخ التغذية</h2>${ms.map(m=>{const t=Object.values(m.items||{}).flat().reduce((a,i)=>({k:a.k+i.k,p:a.p+i.p,c:a.c+i.c,f:a.f+i.f}),{k:0,p:0,c:0,f:0});return `<div class="c"><div class="r sp"><b>${m.id}</b><span><button class="s" onclick="date='${m.id}';go('nut')">تعديل</button> <button class="x" onclick="delRec('meals','${m.id}')">🗑</button></span></div><div class="mu">${Math.round(t.k)} kcal • P${n1(t.p)} C${n1(t.c)} F${n1(t.f)} • تحقيق الهدف ${Math.round(t.k/S.cal*100)}%</div></div>`}).join('')}`},
+async set(){const calc=bmr()*S.mult;
+ return `<div class="c"><h3>الملف الشخصي</h3><div class="g">${[['name','الاسم','text'],['age','العمر','number'],['h','الطول سم','number'],['w','الوزن كجم','number']].map(([k,l,t])=>`<label class="mu">${l}<input type="${t}" id="p_${k}" value="${E(P[k])}" style="width:100%"></label>`).join('')}<label class="mu">النوع<select id="p_gender" style="width:100%"><option>ذكر</option><option ${P.gender=='أنثى'?'selected':''}>أنثى</option></select></label></div></div>
+ <div class="c"><h3>الأهداف الغذائية (قابلة للتعديل)</h3><div class="g">${[['cal','سعرات'],['p','بروتين g'],['c','كارب g'],['f','دهون g'],['surplus','زيادة فوق TDEE'],['rest','راحة بين المجموعات (ث)']].map(([k,l])=>`<label class="mu">${l}<input type="number" id="s_${k}" value="${S[k]}" style="width:100%"></label>`).join('')}</div>
+ <label class="mu">معامل النشاط<input type="number" step="0.05" id="s_mult" value="${S.mult}" style="width:100%"></label><div class="mu">Mifflin-St Jeor: 10×الوزن + 6.25×الطول − 5×العمر ± (5 ذكر / −161 أنثى). BMR = ${Math.round(bmr())} • TDEE = BMR×${S.mult} = ${Math.round(calc)}. المعاملات تقديرية (1.2 خامل … 1.9 نشاط شديد) وليست وصفة طبية. لا يتغير هدف السعرات تلقائياً.</div>
+ <div class="r"><button onclick="saveSet()">حفظ</button><button class="s" onclick="applyCal()">اقترح السعرات = TDEE + ${S.surplus}</button></div></div>
+ <div class="c"><h3>المظهر</h3><select id="s_theme" onchange="S.theme=this.value;document.documentElement.dataset.t=S.theme;put('settings',S)"><option value="dark">داكن</option><option value="light" ${S.theme=='light'?'selected':''}>فاتح</option></select></div>
+ <div class="c"><h3>تنبيهات الوجبات</h3>${Object.keys(MN).map(k=>`<div class="row"><label class="r"><input type="checkbox" ${R.on[k]?'checked':''} onchange="R.on['${k}']=this.checked;put('reminders',R)">${MN[k]}</label><input type="time" value="${R.t[k]}" onchange="R.t['${k}']=this.value;put('reminders',R)"><input placeholder="رسالة مخصصة" value="${E(R.msg[k]||'')}" onchange="R.msg['${k}']=this.value;put('reminders',R)" style="width:130px"></div>`).join('')}
+ <button onclick="askNotif()">تفعيل الإشعارات + تجربة</button><div class="mu">⚠️ التنبيهات تعمل فقط والتطبيق مفتوح (أو في الخلفية ما دام المتصفح لم يُغلق النظام صفحته). المتصفحات لا تدعم جدولة إشعارات موثوقة والتطبيق مغلق بدون خادم Push. لأن شرطك عدم وجود Backend، البديل الموثوق: منبهات هاتف أندرويد.</div></div>
+ <div class="c"><h3>النسخ الاحتياطي</h3><div class="mu">⚠️ مسح بيانات المتصفح أو حذف التطبيق قد يمسح بياناتك. صدّر نسخة بانتظام.</div><div class="r"><button onclick="exportJSON()">تصدير JSON</button><button class="s" onclick="$('#imp').click()">استيراد JSON</button><input type="file" id="imp" accept=".json" hidden onchange="importJSON(this.files[0])"></div><div class="r" style="margin-top:6px"><button class="s" onclick="exportCSV('sessions')">CSV تمارين</button><button class="s" onclick="exportCSV('meals')">CSV تغذية</button><button class="s" onclick="exportCSV('measures')">CSV قياسات</button></div></div>
+ <button class="x" onclick="resetApp()">إعادة ضبط التطبيق</button>`}};
+/* ===== Library ===== */
+function libList(){const q=($('#q')?.value||'').toLowerCase(),c=$('#cf')?.value||'';return EX.filter(e=>(!c||e.cat==c)&&(e.ar+e.en).toLowerCase().includes(q)).map(e=>`<details class="c"><summary class="r"><span class="ill">${CAT[e.cat][1]}</span><span><b>${e.ar}</b> / ${e.en}<br><span class="tag">${CAT[e.cat][0]}</span> <span class="tag">${e.eq}</span></span></summary><div class="mu">عضلات مساعدة: ${e.sec}</div><p><b>البداية:</b> ${e.start}<br><b>التنفيذ:</b> ${e.steps}<br><b>خطأ شائع:</b> ${e.mistake}</p></details>`).join('')}
+const libFilter=()=>{$('#ll').innerHTML=libList()};
+/* ===== Programs & sessions ===== */
+const exOpts=()=>EX.map(e=>`<option value="${e.id}">${e.ar} — ${e.en}</option>`).join('');
+function editView(){return `<div class="c"><input id="pn" value="${E(EDIT.name)}" placeholder="اسم اليوم" style="width:100%">${EDIT.ex.map((i,x)=>`<div class="row"><span>${EX.find(e=>e.id==i)?.ar}</span><span><button class="s" onclick="mvEx(${x},-1)">↑</button> <button class="s" onclick="mvEx(${x},1)">↓</button> <button class="x" onclick="EDIT.ex.splice(${x},1);render()">✕</button></span></div>`).join('')}<div class="r"><select id="pa" style="flex:1">${exOpts()}</select><button onclick="EDIT.name=$('#pn').value;EDIT.ex.push($('#pa').value);render()">+</button></div><div class="r" style="margin-top:8px"><button onclick="saveProg()">حفظ</button><button class="s" onclick="EDIT=null;render()">إلغاء</button></div></div>`}
+const editProg=async id=>{EDIT=id?await get('programs',id):{id:uid(),name:'',ex:[]};render()};
+const mvEx=(x,d)=>{EDIT.name=$('#pn').value;const y=x+d;if(y<0||y>=EDIT.ex.length)return;[EDIT.ex[x],EDIT.ex[y]]=[EDIT.ex[y],EDIT.ex[x]];render()};
+const saveProg=async()=>{EDIT.name=$('#pn').value.trim()||'يوم تمرين';await put('programs',EDIT);EDIT=null;render()};
+const dupProg=async id=>{const p=await get('programs',id);await put('programs',{...p,id:uid(),name:p.name+' (نسخة)'});render()};
+const delProg=async id=>{if(confirm('حذف هذا اليوم؟')){await del('programs',id);render()}};
+const newEx=eid=>{const x=EX.find(e=>e.id==eid);return{eid,name:x.ar+' / '+x.en,sets:[{w:'',r:'',d:0}],note:''}};
+async function startDay(id){const p=id&&await get('programs',id);SES={id:'active',active:1,date:td(),name:p?p.name:'تمرين حر',start:Date.now(),ex:p?p.ex.map(newEx):[]};await put('sessions',SES);render()}
+const sv=()=>put('sessions',SES);
+let lastS=[];
+async function prevOf(eid){const ss=lastS.length?lastS:(lastS=(await all('sessions')).filter(x=>!x.active).sort((a,b)=>b.start-a.start));for(const s of ss){const e=s.ex.find(e=>e.eid==eid);if(e)return e.sets.filter(x=>x.d)}return[]}
+async function sesView(){lastS=[];let h=`<div class="c"><div class="r sp"><b>${E(SES.name)}</b><b id="dur"></b></div></div>`;
+ for(const[i,e]of SES.ex.entries()){const pv=await prevOf(e.eid);h+=`<div class="c"><div class="r sp"><h3>${E(e.name)}</h3><button class="x" style="min-height:32px" onclick="rmEx(${i})">✕</button></div><div class="mu">السابق: ${pv.map(x=>x.w+'×'+x.r).join(' | ')||'—'}</div>
+ ${e.sets.map((s,j)=>`<div class="r"><b>${j+1}</b><input type="number" step="0.5" placeholder="kg" value="${s.w}" oninput="SES.ex[${i}].sets[${j}].w=this.value;sv()"><input type="number" placeholder="تكرار" value="${s.r}" oninput="SES.ex[${i}].sets[${j}].r=this.value;sv()"><input type="checkbox" ${s.d?'checked':''} onchange="doneSet(${i},${j},this.checked)"><button class="s" onclick="SES.ex[${i}].sets.splice(${j},1);sv();render()">✕</button></div>`).join('')}
+ <div class="r"><button class="s" onclick="SES.ex[${i}].sets.push({w:'',r:'',d:0});sv();render()">+ مجموعة</button><button class="s" onclick="copyPrev(${i})">نسخ السابق</button></div><input placeholder="ملاحظات" value="${E(e.note)}" oninput="SES.ex[${i}].note=this.value;sv()" style="width:100%;margin-top:6px"></div>`}
+ return h+`<div class="c r"><select id="sa" style="flex:1">${exOpts()}</select><button onclick="SES.ex.push(newEx($('#sa').value));sv();render()">+ تمرين</button></div><div class="r"><button onclick="finish()">إنهاء وحفظ</button><button class="x" onclick="cancelSes()">إلغاء</button></div>`}
+const doneSet=(i,j,v)=>{SES.ex[i].sets[j].d=v?1:0;sv();if(v){restEnd=Date.now()+S.rest*1000}};
+const copyPrev=async i=>{const pv=await prevOf(SES.ex[i].eid);if(pv.length){SES.ex[i].sets=pv.map(x=>({w:x.w,r:x.r,d:0}));sv();render()}else alert('لا يوجد تمرين سابق')};
+const rmEx=i=>{SES.ex.splice(i,1);sv();render()};
+async function finish(){SES.ex.forEach(e=>e.sets=e.sets.filter(s=>s.d||s.w||s.r));const s={...SES,id:uid(),active:0,end:Date.now(),dur:Date.now()-SES.start};await put('sessions',s);await del('sessions','active');SES=null;restEnd=0;alert('تم حفظ التمرين');go('hist')}
+const cancelSes=async()=>{if(confirm('إلغاء التمرين الحالي؟')){await del('sessions','active');SES=null;render()}};
+function tick(){const r=restEnd-Date.now();$('#rest').textContent=r>0?'راحة '+Math.ceil(r/1000)+'ث':'';if(restEnd&&r<=0){restEnd=0;navigator.vibrate&&navigator.vibrate([200,100,200])}const d=$('#dur');if(d&&SES){const s=Math.floor((Date.now()-SES.start)/1000);d.textContent=Math.floor(s/60)+':'+String(s%60).padStart(2,'0')}}
+/* ===== Measurements ===== */
+async function addMeas(rec){const v={};Object.keys(MK).forEach(k=>{const x=$('#m_'+k).value;if(x!=='')v[k]=num(x)});if(!Object.keys(v).length)return alert('أدخل قياساً واحداً على الأقل');
+ await put('measures',{id:window._me||uid(),date:$('#md').value||td(),v});window._me=null;if(v.w){P.w=v.w;await put('profile',P)}render()}
+async function editMeas(id){const m=await get('measures',id);await render();window._me=id;$('#md').value=m.date;Object.entries(m.v).forEach(([k,v])=>$('#m_'+k).value=v);scrollTo(0,0)}
+async function cmp(){const a=await get('measures',$('#ca').value),b=await get('measures',$('#cb').value);if(!a||!b)return;const[o,nw]=a.date<b.date?[a,b]:[b,a];
+ $('#cr').innerHTML=Object.keys(MK).filter(k=>o.v[k]!=null&&nw.v[k]!=null).map(k=>{const d=nw.v[k]-o.v[k];return `<div class="row"><span>${MK[k]}</span><span>${o.v[k]} → ${nw.v[k]} (${d>0?'+':''}${n1(d)} / ${n1(d/o.v[k]*100)}%)</span></div>`}).join('')||'<span class="mu">لا قياسات مشتركة</span>'}
+async function delRec(s,id){if(!confirm('تأكيد الحذف؟'))return;await del(s,id);if(s=='foods')FOODS=await all('foods');render()}
+/* ===== Nutrition ===== */
+async function addFood(k){const f=FOODS.find(x=>x.id==$('#fs_'+k).value),g=num($('#fg_'+k).value);if(g<=0)return alert('أدخل الكمية بالجرام');const m=await get('meals',date)||{id:date,items:{},done:{}},x=g/100;
+ (m.items[k]=m.items[k]||[]).push({name:f.name,g,k:f.k*x,p:f.p*x,c:f.c*x,f:f.f*x});await put('meals',m);render()}
+async function rmFood(k,i){const m=await get('meals',date);m.items[k].splice(i,1);await put('meals',m);render()}
+async function markDone(k,v){const m=await get('meals',date)||{id:date,items:{},done:{}};m.done[k]=v;await put('meals',m)}
+async function copyY(){const y=new Date(date);y.setDate(y.getDate()-1);const m=await get('meals',y.toLocaleDateString('en-CA'));if(!m)return alert('لا توجد وجبات لأمس');if(!confirm('استبدال وجبات اليوم بوجبات أمس؟'))return;await put('meals',{id:date,items:JSON.parse(JSON.stringify(m.items)),done:{}});render()}
+async function addCustom(){const name=$('#cn').value.trim();if(!name)return alert('أدخل الاسم');await put('foods',{id:'c'+uid(),name,k:num($('#ck').value),p:num($('#cp').value),c:num($('#cc').value),f:num($('#cf2').value)});FOODS=await all('foods');render()}
+async function editFood(id){const f=FOODS.find(x=>x.id==id),v=prompt('kcal,P,C,F لكل 100 جم',[f.k,f.p,f.c,f.f].join(','));if(!v)return;const a=v.split(',').map(num);if(a.length!=4)return alert('4 قيم مفصولة بفواصل');Object.assign(f,{k:a[0],p:a[1],c:a[2],f:a[3],approx:0});await put('foods',f);render()}
+function sugCombos(rem){const pr=FOODS.filter(f=>f.p>=10&&f.k<450||f.id=='f24'),cb=FOODS.filter(f=>f.c>=20&&f.p<20&&f.k<400),out=[];
+ for(let i=0;i<3;i++){const A=pr[(sugOff+i*3)%pr.length],B=cb[(sugOff+i*2)%cb.length];if(!A||!B||rem.k<150)break;
+ const gA=Math.min(300,Math.max(50,Math.round(Math.max(rem.p,0)*.7/(A.p/100)/10)*10)),kA=A.k*gA/100,gB=Math.min(400,Math.max(0,Math.round(Math.max(rem.k-kA,0)*.7/(B.k/100)/10)*10));
+ out.push([{f:A,g:gA},{f:B,g:gB}].filter(x=>x.g>0))}return out}
+const sugHtml=rem=>{if(rem.k<150)return '<div class="mu">تقريباً أنهيت سعرات اليوم.</div>';const cs=sugCombos(rem);window._sg=cs;
+ return cs.map((c,i)=>{const t=c.reduce((a,x)=>({k:a.k+x.f.k*x.g/100,p:a.p+x.f.p*x.g/100,c:a.c+x.f.c*x.g/100,f:a.f+x.f.f*x.g/100}),{k:0,p:0,c:0,f:0});
+ return `<div class="row"><span>${c.map(x=>E(x.f.name.split(' / ')[0])+' '+x.g+'g').join(' + ')}<br><span class="mu">${Math.round(t.k)}k P${n1(t.p)} C${n1(t.c)} F${n1(t.f)}</span></span><span><select id="sm${i}">${Object.entries(MN).map(([k,l])=>`<option value="${k}">${l}</option>`).join('')}</select><button onclick="addSug(${i})">+</button></span></div>`}).join('')+'<button class="s" onclick="sugOff++;render()">استبدال الاقتراحات</button>'}
+async function addSug(i){const k=$('#sm'+i).value,m=await get('meals',date)||{id:date,items:{},done:{}};window._sg[i].forEach(({f,g})=>{const x=g/100;(m.items[k]=m.items[k]||[]).push({name:f.name,g,k:f.k*x,p:f.p*x,c:f.c*x,f:f.f*x})});await put('meals',m);render()}
+/* ===== Progress ===== */
+async function series(){const m=$('#pm').value,ms=await all('measures'),days=+$('#pr').value,lim=new Date(Date.now()-days*864e5).toLocaleDateString('en-CA');
+ if(m=='str'){const e=$('#pe').value;return(await all('sessions')).filter(s=>!s.active&&s.date>=lim).sort((a,b)=>a.start-b.start).map(s=>{const x=s.ex.find(x=>x.eid==e);const w=x?Math.max(0,...x.sets.filter(t=>t.d).map(t=>num(t.w))):0;return w?[s.date,w]:null}).filter(Boolean)}
+ return ms.filter(x=>x.v[m]!=null&&x.date>=lim).sort((a,b)=>a.date<b.date?-1:1).map(x=>[x.date,x.v[m]])}
+async function drawChart(){const pts=await series(),c=$('#cv');if(!c)return;const g=c.getContext('2d'),W=c.width,H=c.height,cs=getComputedStyle(document.body);g.clearRect(0,0,W,H);
+ if(pts.length<1){g.fillStyle='#8d95a0';g.font='18px sans-serif';g.fillText('لا توجد بيانات في هذه الفترة',W/2-110,H/2);$('#cs').textContent='';return}
+ const ys=pts.map(p=>p[1]),mn=Math.min(...ys),mx=Math.max(...ys),sp=mx-mn||1,px=i=>30+(pts.length==1?.5:i/(pts.length-1))*(W-60),py=v=>H-30-(v-mn)/sp*(H-60);
+ g.strokeStyle='#b8f03c';g.lineWidth=3;g.beginPath();pts.forEach((p,i)=>i?g.lineTo(px(i),py(p[1])):g.moveTo(px(i),py(p[1])));g.stroke();g.fillStyle='#b8f03c';g.font='13px sans-serif';
+ pts.forEach((p,i)=>{g.beginPath();g.arc(px(i),py(p[1]),4,0,7);g.fill();if(pts.length<15)g.fillText(p[1],px(i)-8,py(p[1])-9)});
+ const a=pts[0][1],b=pts[pts.length-1][1];$('#cs').textContent=`من ${a} إلى ${b} (${b-a>0?'+':''}${n1(b-a)} / ${a?n1((b-a)/a*100):0}%) — ${pts.length} قراءة`}
+async function weekly(ms,ss){const days=[...Array(7)].map((_,i)=>new Date(Date.now()-i*864e5).toLocaleDateString('en-CA')),ts=(await Promise.all(days.map(dayTot))).filter(t=>t.k>0);
+ const av=k=>ts.length?Math.round(ts.reduce((a,t)=>a+t[k],0)/ts.length):0,wk=ss.filter(s=>s.date>=days[6]),w=ms.filter(m=>m.v.w!=null&&m.date>=days[6]).sort((a,b)=>a.date<b.date?-1:1);
+ return `<div class="c"><h3>ملخص آخر 7 أيام</h3><div class="row"><span>متوسط السعرات</span><b>${av('k')}</b></div><div class="row"><span>متوسط البروتين</span><b>${av('p')} g</b></div><div class="row"><span>أيام التمرين</span><b>${new Set(wk.map(s=>s.date)).size}</b></div><div class="row"><span>تمارين مكتملة</span><b>${wk.length}</b></div><div class="row"><span>تغير الوزن</span><b>${w.length>1?n1(w[w.length-1].v.w-w[0].v.w)+' kg':'—'}</b></div><div class="row"><span>تحقيق هدف السعرات</span><b>${Math.round(av('k')/S.cal*100)}%</b></div></div>`}
+/* ===== Settings, reminders, backup ===== */
+async function saveSet(){['name','age','h','w','gender'].forEach(k=>P[k]=['name','gender'].includes(k)?$('#p_'+k).value:num($('#p_'+k).value));['cal','p','c','f','surplus','rest','mult'].forEach(k=>S[k]=num($('#s_'+k).value));await put('profile',P);await put('settings',S);render();alert('تم الحفظ')}
+async function applyCal(){const c=Math.round(bmr()*num($('#s_mult').value)+num($('#s_surplus').value));if(confirm('تغيير هدف السعرات إلى '+c+' ؟')){S.cal=c;S.mult=num($('#s_mult').value);S.surplus=num($('#s_surplus').value);await put('settings',S);render()}}
+function notify(t,b){if('Notification'in window&&Notification.permission=='granted'&&navigator.serviceWorker)navigator.serviceWorker.ready.then(r=>r.showNotification(t,{body:b,icon:'icon.svg',tag:t})).catch(()=>{})}
+function fire(k){const msg=R.msg[k]||'حان موعد '+MN[k];notify('GYM TRACKER PRO',msg);const b=$('#ban');b.style.display='block';b.innerHTML=`${E(msg)}<div class="r"><button onclick="snooze('${k}')" style="background:#101215;color:#b8f03c">تأجيل 10د</button><button onclick="markDone('${k}',true);$('#ban').style.display='none'">تم</button><button class="s" onclick="$('#ban').style.display='none'">إغلاق</button></div>`}
+const snooze=k=>{$('#ban').style.display='none';setTimeout(()=>fire(k),6e5)};
+async function remCheck(){const hm=new Date().toTimeString().slice(0,5);for(const k of Object.keys(MN))if(R.on[k]&&R.t[k]==hm&&R.fired!=td()+k){R.fired=td()+k;await put('reminders',R);const m=await get('meals',td());if(!(m&&m.done[k]))fire(k)}}
+async function askNotif(){if(!('Notification'in window))return alert('المتصفح لا يدعم الإشعارات');const p=await Notification.requestPermission();if(p=='granted')notify('GYM TRACKER PRO','الإشعارات تعمل');else alert('تم رفض الإذن')}
+async function exportJSON(){const d={app:'GTP',v:1,at:new Date().toISOString(),stores:{}};for(const s of ST)d.stores[s]=await all(s);dl('gym-backup-'+td()+'.json',JSON.stringify(d),'application/json')}
+function dl(n,t,m){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+t],{type:m}));a.download=n;a.click()}
+async function importJSON(f){if(!f)return;try{const d=JSON.parse(await f.text());if(d.app!='GTP'||typeof d.stores!='object')throw 0;for(const s of ST)if(d.stores[s]&&!Array.isArray(d.stores[s]))throw 0;
+ if(!confirm('سيتم استبدال كل البيانات الحالية بالنسخة. متابعة؟'))return;for(const s of ST)if(Array.isArray(d.stores[s])){await clr(s);for(const o of d.stores[s])if(o&&o.id!=null)await put(s,o)}location.reload()}catch(e){alert('ملف غير صالح')}}
+async function exportCSV(s){const q=c=>'"'+String(c??'').replace(/"/g,'""')+'"';let rows;
+ if(s=='sessions')rows=[['date','workout','exercise','set','kg','reps','done','minutes','note'],...(await all(s)).filter(x=>!x.active).flatMap(x=>x.ex.flatMap(e=>e.sets.map((t,i)=>[x.date,x.name,e.name,i+1,t.w,t.r,t.d,Math.round(x.dur/6e4),e.note])))];
+ else if(s=='meals')rows=[['date','meal','food','grams','kcal','protein','carbs','fat'],...(await all(s)).flatMap(m=>Object.entries(m.items).flatMap(([k,a])=>a.map(i=>[m.id,MN[k],i.name,i.g,n1(i.k),n1(i.p),n1(i.c),n1(i.f)])))];
+ else rows=[['date',...Object.keys(MK)],...(await all(s)).map(m=>[m.date,...Object.keys(MK).map(k=>m.v[k]??'')])];
+ dl(s+'-'+td()+'.csv',rows.map(r=>r.map(q).join(',')).join('\n'),'text/csv')}
+async function resetApp(){if(!confirm('سيتم حذف كل البيانات نهائياً. متأكد؟'))return;if(!confirm('تأكيد أخير: لا يمكن التراجع.'))return;db.close();indexedDB.deleteDatabase('gtp').onsuccess=()=>location.reload()}
+init();
+</script></body></html>
